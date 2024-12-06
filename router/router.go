@@ -29,6 +29,10 @@ type LoginParam struct {
 	SessionId        string `json:"sessionId"`
 }
 
+type UserNameRequest struct {
+	UserName string `json:"userName" binding:"required"` // 使用json标签来指定字段名，并使用binding来确保字段是必需的
+}
+
 func SetupRouter() *gin.Engine {
 	router := gin.Default()
 	expiration := 1440 * time.Minute
@@ -153,12 +157,22 @@ func SetupRouter() *gin.Engine {
 	})
 
 	router.POST("/verifyUserNameIsExist", func(c *gin.Context) {
-		username := c.Query("username")
-		isExist := service.CheckUserNameIsInDB(username)
-		if isExist {
-			c.JSON(401, gin.H{
+		var request UserNameRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			// 如果绑定失败，返回错误
+			c.JSON(401, gin.H{})
+			return
+		}
+
+		// 使用绑定后的数据
+		userName := request.UserName
+		isExist := service.CheckUserNameIsInDB(userName)
+		log.Println(isExist)
+		log.Println(userName)
+		if !isExist {
+			c.JSON(200, gin.H{
 				"message": "用户名已存在",
-				"data":    isExist,
+				"data":    !isExist,
 			})
 		} else {
 			c.JSON(200, gin.H{
