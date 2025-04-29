@@ -54,3 +54,25 @@ func CheckPhoneIsInDB(phone string) bool {
 func CheckEmailIsInDB(email string) bool {
 	return CheckValueIsInDB("email", email)
 }
+
+// GetUserByName 根据用户名查询用户信息（不包含密码）
+func GetUserByName(userName string) (map[string]interface{}, error) {
+    var user User
+    if err := dataBase.Where("username = ?", userName).First(&user).Error; err != nil {
+        return nil, err
+    }
+    return map[string]interface{}{
+        "id":       user.ID,
+        "username": user.Username,
+        "email":    user.Email,
+		"phone":	user.Phone,
+		"resumeURL": user.ResumeURL,
+        // 其他需要返回的字段
+    }, nil
+}
+
+// UpdateUserResumeURL 更新用户的 resume_url 字段
+func UpdateUserResumeURL(userName string, resumeURL string) error {
+	result := dataBase.Model(&User{}).Where("username = ?", userName).Update("resume_url", resumeURL)
+	return result.Error
+}

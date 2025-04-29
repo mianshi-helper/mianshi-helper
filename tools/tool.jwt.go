@@ -2,6 +2,7 @@ package tools
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -12,7 +13,7 @@ type MyClaims struct {
 	jwt.StandardClaims
 }
 
-const TokenExpireDuration = time.Hour * 2
+const TokenExpireDuration = 1440 * time.Minute
 
 var MySecret = []byte("面试助手的密钥")
 
@@ -45,4 +46,17 @@ func ParseToken(tokenString string) (*MyClaims, error) {
 		return claims, nil
 	}
 	return nil, errors.New("invalid token")
+}
+
+// 把 Bearer xxxx 后面的 xxxx 提取出来
+func GetTokenContent(authHeader string) string {
+	if authHeader == "" {
+		return ""
+	}
+	// 按空格分割
+	parts := strings.SplitN(authHeader, " ", 2)
+	if !(len(parts) == 2 && parts[0] == "Bearer") {
+		return ""
+	}
+	return parts[1]
 }

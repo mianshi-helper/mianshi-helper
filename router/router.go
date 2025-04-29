@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	Dialogue "mianshi-helper/dialogue"
+	"mianshi-helper/config"
 	"mianshi-helper/engine"
 	InInitializer "mianshi-helper/initializer"
 	"mianshi-helper/service"
@@ -69,6 +70,7 @@ func SetupRouter() *gin.Engine {
 			err := json.NewDecoder(c.Request.Body).Decode(&question)
 			redisHelper.Set(context.Background(), "test", question.SessionId, expiration)
 			if err != nil {
+				log.Println(err)
 				return
 			}
 			response := Dialogue.SendDialogueContent(question.ContextStr, question.SessionId)
@@ -148,8 +150,8 @@ func SetupRouter() *gin.Engine {
 					"message": "登陆成功!",
 					"data": map[string]interface{}{
 						"token": jwt,
-						// 过期时间是当前时间+登陆有效时间
-						"expirationTime": time.Now().Add(expiration).Unix(),
+						// 过期时间是当前时间+登陆有效时间（毫秒级）
+						"expirationTime": time.Now().Add(expiration).Unix() * 1000,
 					},
 				})
 			}
@@ -235,6 +237,81 @@ func SetupRouter() *gin.Engine {
 				"message": "注册成功",
 			})
 		}
+	})
+
+	router.GET("/getAiList", func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		if tools.VerifyLogin(redisHelper, token) == "success" {
+			c.JSON(200, gin.H{
+				"aiList": service.GetAiList(),
+			})
+		} else {
+			c.JSON(403, gin.H{
+				"message": "请重新登录",
+			})
+		}
+	})
+
+	// 新增路由：查询当前用户信息
+	router.GET("/getCurrentUser", func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		log.Println(token)
+		if tools.VerifyLogin(redisHelper, token) != "success" {
+			c.JSON(403, gin.H{"message": "请重新登录"})
+			return
+		}
+		userName := redisHelper.Get(context.Background(), tools.GetTokenContent(token)).Val()
+		log.Println(userName)
+		if userName == "" {
+			c.JSON(404, gin.H{"error": "用户不存在"})
+			return
+		}
+		userInfo, err := service.GetUserByName(userName)
+		if err != nil {
+			c.JSON(404, gin.H{"error": "用户不存在"})
+			return
+		}
+		c.JSON(200, gin.H{"data": userInfo})
+	})
+
+	router.POST("/upload", func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		if tools.VerifyLogin(redisHelper, token) != "success" {
+			c.JSON(403, gin.H{"message": "请重新登录"})
+			return
+		}
+
+		// 从 token 中解析 userName
+		userName := redisHelper.Get(context.Background(), tools.GetTokenContent(token)).Val()
+		if userName == "" {
+			c.JSON(404, gin.H{"error": "用户不存在"})
+			return
+		}
+
+		// 接收上传的文件
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(400, gin.H{"error": "文件上传失败"})
+			return
+		}
+
+		// 生成文件名：userName + 时间戳
+		fileName := userName + "_" + time.Now().Format("20060102150405") + "_" + file.Filename
+		filePath := config.CDNDir + "/" + fileName
+
+		// 保存文件到 cdn 目录
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(500, gin.H{"error": "文件保存失败"})
+			return
+		}
+
+		// 更新数据库中的 resume_url 字段
+		if err := service.UpdateUserResumeURL(userName, "/cdn/"+fileName); err != nil {
+			c.JSON(500, gin.H{"error": "数据库更新失败"})
+			return
+		}
+
+		c.JSON(200, gin.H{"message": "文件上传成功", "filePath": "/cdn/" + fileName})
 	})
 
 	return router

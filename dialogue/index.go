@@ -62,14 +62,11 @@ func parseTextOutputs(rawText json.RawMessage) (*NestedTextOutputs, error) {
 
 func SendDialogueContent(context string, conversation_id string) string {
 
-	url := "https://qianfan.baidubce.com/v2/app/conversation/runs"
-	fmt.Println(context, conversation_id)
+	url := "http://localhost:3099/answer"
 	payload := strings.NewReader(
 		`{
-			"app_id":"6f7aef3e-3db1-434d-ac74-bc3199477d27",
-			"stream":false,
-			"query":"` + context + `",
-			"conversation_id":"` + conversation_id + `"
+			"sessionId": "` + conversation_id + `",
+			"query": "` + context + `"
 		}`)
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", url, payload)
@@ -79,7 +76,6 @@ func SendDialogueContent(context string, conversation_id string) string {
 		return err.Error()
 	}
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("X-Appbuilder-Authorization", "Bearer bce-v3/ALTAK-dfpyIHGrYVav9sBP6AZp7/d81d889bc31f8af7a6cd244ee60a8e83561ce6a4")
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -93,26 +89,15 @@ func SendDialogueContent(context string, conversation_id string) string {
 		fmt.Println(err)
 		return err.Error()
 	}
-	fmt.Println(string(body))
-	response := Response{}
-	err = json.Unmarshal([]byte(body), &response)
+
+	var response struct {
+		Response string `json:"response"`
+	}
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		fmt.Println(err)
 		return err.Error()
 	}
 
-	// 解析 outputs.text 字段
-	for _, content := range response.Content {
-		if content.ContentType == "text" && content.Outputs.Text != nil {
-			nestedTextOutputs, err := parseTextOutputs(content.Outputs.Text)
-			if err != nil {
-				fmt.Println("Error parsing text outputs:", err)
-				continue
-			}
-			// 使用 nestedTextOutputs.Text 或 nestedTextOutputs.TextOutputs 根据需要
-			fmt.Println("Parsed text outputs:", nestedTextOutputs)
-		}
-	}
-
-	return response.Answer
+	return response.Response
 }
