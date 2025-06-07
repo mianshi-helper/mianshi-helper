@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"log"
+	"net/http"
+	"net/url"
 	Dialogue "mianshi-helper/dialogue"
 	"mianshi-helper/config"
 	"mianshi-helper/engine"
@@ -48,7 +50,8 @@ func SetupRouter() *gin.Engine {
 
 	router.POST("/create", func(c *gin.Context) {
 		token := c.GetHeader("Authorization")
-		sessionId := InInitializer.CreateDialogue()
+		userName := redisHelper.Get(context.Background(), tools.GetTokenContent(token)).Val()
+		sessionId := InInitializer.CreateDialogue(userName)
 		log.Println(tools.VerifyLogin(redisHelper, token))
 		if tools.VerifyLogin(redisHelper, token) == "success" {
 			c.JSON(200, gin.H{
@@ -171,10 +174,10 @@ func SetupRouter() *gin.Engine {
 		isExist := service.CheckUserNameIsInDB(userName)
 		log.Println(isExist)
 		log.Println(userName)
-		if !isExist {
+		if isExist {
 			c.JSON(200, gin.H{
 				"message": "用户名已存在",
-				"data":    !isExist,
+				"data":    isExist,
 			})
 		} else {
 			c.JSON(200, gin.H{
@@ -288,15 +291,29 @@ func SetupRouter() *gin.Engine {
 			return
 		}
 
-		// 接收上传的文件
-		file, err := c.FormFile("file")
-		if err != nil {
-			c.JSON(400, gin.H{"error": "文件上传失败"})
+		contentType := c.GetHeader("Content-Type")
+		log.Println(contentType)
+		if !strings.Contains(contentType, "multipart/form-data") || !strings.Contains(contentType, "boundary=") {
+			c.JSON(400, gin.H{"error": "请求头Content-Type必须为multipart/form-data且包含boundary参数"})
 			return
 		}
 
-		// 生成文件名：userName + 时间戳
-		fileName := userName + "_" + time.Now().Format("20060102150405") + "_" + file.Filename
+		// 接收上传的文件
+		file, err := c.FormFile("file")
+		if err != nil {
+			log.Println("文件上传错误详情:")
+			log.Printf("Content-Type: %s\n", contentType)
+			log.Printf("错误: %v\n", err)
+			if err.Error() == "multipart: NextPart: EOF" {
+				c.JSON(400, gin.H{"error": "请求体不完整，请检查文件内容和大小"})
+			} else {
+				c.JSON(400, gin.H{"error": "文件上传失败"})
+			}
+			return
+		}
+
+		// 生成文件名：userName + 原始文件名
+		fileName := userName + "_" + file.Filename
 		filePath := config.CDNDir + "/" + fileName
 
 		// 保存文件到 cdn 目录
@@ -308,6 +325,31 @@ func SetupRouter() *gin.Engine {
 		// 更新数据库中的 resume_url 字段
 		if err := service.UpdateUserResumeURL(userName, "/cdn/"+fileName); err != nil {
 			c.JSON(500, gin.H{"error": "数据库更新失败"})
+			return
+		}
+
+		// 发送文件地址到 createRagDataSource
+		reqBody := url.Values{"fileName": {fileName}, "username": {userName}}
+		req, err := http.NewRequest("POST", "http://localhost:3099/createRagDataSource", strings.NewReader(reqBody.Encode()))
+		if err != nil {
+			log.Printf("发送文件地址到 createRagDataSource 失败: %v\n", err)
+			c.JSON(500, gin.H{"error": "文件地址发送失败"})
+			return
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("发送文件地址到 createRagDataSource 失败: %v\n", err)
+			c.JSON(500, gin.H{"error": "文件地址发送失败"})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("createRagDataSource 返回非200状态码: %d\n", resp.StatusCode)
+			c.JSON(500, gin.H{"error": "文件地址处理失败"})
 			return
 		}
 

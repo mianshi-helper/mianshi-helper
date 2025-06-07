@@ -4,3 +4,7 @@ package config
 const (
 	CDNDir = "/Users/yuyangliu/Desktop/project/mianshi-helper/cdn"
 )
+
+const (
+	AIServiceUrl = "http://localhost:3099"
+)

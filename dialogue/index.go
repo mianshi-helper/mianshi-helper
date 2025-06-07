@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"mianshi-helper/config"
 )
 
 type Response struct {
@@ -62,7 +63,7 @@ func parseTextOutputs(rawText json.RawMessage) (*NestedTextOutputs, error) {
 
 func SendDialogueContent(context string, conversation_id string) string {
 
-	url := "http://localhost:3099/answer"
+	url := config.AIServiceUrl + "/answer"
 	payload := strings.NewReader(
 		`{
 			"sessionId": "` + conversation_id + `",

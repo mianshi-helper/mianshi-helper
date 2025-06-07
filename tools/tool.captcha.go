@@ -20,8 +20,6 @@ var store = base64Captcha.DefaultMemStore
 func GenerateCaptcha(context *gin.Context) CaptchaResult {
 	// 生成默认数字
 	//driver := base64Captcha.DefaultDriverDigit
-	// 此尺寸的调整需要根据网站进行调试，链接：
-	// https://captcha.mojotv.cn/
 	driver := base64Captcha.NewDriverDigit(70, 130, 4, 0.8, 100)
 	// 生成base64图片
 	captcha := base64Captcha.NewCaptcha(driver, store)

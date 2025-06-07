@@ -1,10 +1,12 @@
 package inInitializer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"mianshi-helper/config"
 )
 
 type Dialogue struct {
@@ -12,11 +14,17 @@ type Dialogue struct {
 	ConversationID string `json:"conversation_id"` // 修正了字段名和JSON标签
 }
 
-func CreateDialogue() string {
-	url := "http://localhost:3099/create"
-	client := &http.Client{}
-	req, err := http.NewRequest("POST", url, nil)
+func CreateDialogue(username string) string {
+	url := config.AIServiceUrl + "/create"
+	requestBody := map[string]string{"username": username}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
+	}
 
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		fmt.Println(err)
 		return err.Error()
